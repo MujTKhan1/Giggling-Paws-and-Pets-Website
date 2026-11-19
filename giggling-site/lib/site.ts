@@ -18,6 +18,24 @@ export const HERO_IMAGE = {
   focusMobile: "77% 30%",
 };
 
+/**
+ * Spots in the hero photo ("x,y" as fractions of the full image) where the hero's
+ * animated extras sit. Update these if the hero photo is swapped.
+ */
+export const HERO_SPOTS = {
+  /** speech bubbles, anchored at the bubble's tail */
+  woof: "0.555,0.21",
+  mew: "0.86,0.2",
+  /** hearts rising from beside the retriever's head */
+  hearts: "0.735,0.12",
+  /** product hotspots: the paw badge on the bandana, the paw badge on the harness */
+  bandana: "0.656,0.574",
+  harness: "0.85,0.557",
+  /** the striped ball on the rug between the pets, and its diameter as a fraction of image height */
+  ball: "0.752,0.905",
+  ballSize: "0.075",
+};
+
 export const SOCIAL = {
   instagram: "https://www.instagram.com/gigglingpawsandpets_/",
   facebook: "https://www.facebook.com/GigglingPaws/",
