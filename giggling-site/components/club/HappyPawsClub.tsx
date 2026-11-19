@@ -5,7 +5,7 @@ import { gsap } from "@/lib/gsap";
 import { REDUCED_MOTION_QUERY } from "@/lib/motion";
 import { STORE_HOME, STORE_INSTAGRAM } from "@/lib/products";
 import { PawIcon } from "@/components/SiteHeader";
-import { Dashes } from "@/components/hero/PetParadeHero";
+import { Dashes } from "@/components/Doodles";
 
 // Instant-photo frames. The pets are the same golden retriever and grey tabby from the lifestyle shoot.
 const photos = [

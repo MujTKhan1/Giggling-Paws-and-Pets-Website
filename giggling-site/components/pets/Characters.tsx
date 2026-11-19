@@ -172,9 +172,25 @@ function tube(points: V3[], radius: number) {
 /* Golden retriever                                                     */
 /* ------------------------------------------------------------------ */
 
-const DOG_REACH = 0.63; // torso centre to paw bottom
+const DOG_REACH = 0.82; // torso centre to paw bottom
 
-export function GoldenRetriever({ progress, base }: { progress: Progress; base: V3 }) {
+type PetProps = {
+  progress: Progress;
+  base: V3;
+  /** Standing pose for a collection panel: no chase, no trot. */
+  showcase?: boolean;
+  /** 0 → 1 pulse played when the pet's collection scrolls into view (head tilt + tail wag). */
+  greet?: Progress;
+};
+
+const pulse = (greet?: Progress) => (greet ? Math.sin(Math.PI * clamp01(greet.current)) : 0);
+
+/**
+ * Golden retriever with real retriever proportions: deep chest and tucked waist, long straight
+ * forelegs, angled hind legs with haunches, a neck, a long muzzle with a defined stop,
+ * low-set hanging ears, and a long feathered tail carried level.
+ */
+export function GoldenRetriever({ progress, base, showcase = false, greet }: PetProps) {
   const M = mats();
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
@@ -185,40 +201,52 @@ export function GoldenRetriever({ progress, base }: { progress: Progress; base: 
   const legs = [useRef<Group>(null), useRef<Group>(null), useRef<Group>(null), useRef<Group>(null)];
   const phase = useRef(0);
 
-  const tailGeo = useMemo(() => tube([[0, 0, 0], [-0.18, 0.1, 0], [-0.32, 0.3, 0], [-0.3, 0.52, 0]], 0.085), []);
+  const tailGeo = useMemo(
+    () => tube([[0, 0, 0], [-0.2, 0.06, 0], [-0.42, 0.14, 0], [-0.62, 0.2, 0]], 0.065),
+    [],
+  );
   const flapGeo = useMemo(() => {
     const s = new Shape();
-    s.moveTo(-0.27, 0.08);
-    s.lineTo(0.27, 0.08);
-    s.quadraticCurveTo(0.05, -0.2, 0, -0.27);
-    s.quadraticCurveTo(-0.05, -0.2, -0.27, 0.08);
-    const g = new ExtrudeGeometry(s, { depth: 0.03, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 });
-    g.translate(0, 0, -0.015);
+    s.moveTo(-0.22, 0.07);
+    s.lineTo(0.22, 0.07);
+    s.quadraticCurveTo(0.04, -0.17, 0, -0.23);
+    s.quadraticCurveTo(-0.04, -0.17, -0.22, 0.07);
+    const g = new ExtrudeGeometry(s, { depth: 0.025, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 2 });
+    g.translate(0, 0, -0.0125);
     return g;
   }, []);
-  const bandGeo = useMemo(() => new TorusGeometry(0.3, 0.065, 12, 36), []);
+  const bandGeo = useMemo(() => new TorusGeometry(0.2, 0.05, 12, 36), []);
 
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
     const p = progress.current;
     const chase = smoothstep(0.06, 0.8, p);
     const moving = p > 0.04 && p < 0.98;
-    const run = moving ? 1 : 0.18; // a lazy trot in place before the parade starts
+    const run = showcase ? 0 : moving ? 1 : 0.18; // a lazy trot in place before the parade starts
+    const g = pulse(greet);
     phase.current += delta * (moving ? 11 : 5);
     const f = phase.current;
 
     root.current!.position.set(base[0] + chase * 0.6, GROUND_Y + DOG_REACH, base[2] + chase * 0.9);
-    root.current!.rotation.y = -0.4 - chase * 0.3;
+    root.current!.rotation.y = (showcase ? -0.75 : -0.4) - chase * 0.3;
 
-    body.current!.position.y = Math.abs(Math.sin(f)) * 0.08 * run;
-    body.current!.rotation.z = Math.sin(f) * 0.07 * run;
-    head.current!.rotation.z = 0.06 - Math.sin(f) * 0.06 * run;
+    // Breathing / gait bob.
+    body.current!.position.y = Math.abs(Math.sin(f)) * 0.07 * run + Math.sin(t * 2.2) * 0.006;
+    body.current!.rotation.z = Math.sin(f) * 0.06 * run;
+
+    head.current!.rotation.z = 0.04 - Math.sin(f) * 0.05 * run + Math.sin(t * 0.9) * 0.02;
     head.current!.rotation.y = Math.sin(t * 0.8) * 0.08 + chase * 0.15;
-    earL.current!.rotation.x = 0.28 + Math.sin(f + 1) * 0.2 * run;
-    earR.current!.rotation.x = -0.28 - Math.sin(f + 1) * 0.2 * run;
-    tail.current!.rotation.x = Math.sin(t * 12) * 0.45;
+    head.current!.rotation.x = g * 0.4; // curious head tilt
 
-    const amp = 0.75 * run;
+    // Ears swing with the gait and lift a little during the head tilt.
+    earL.current!.rotation.x = 0.12 + Math.sin(f + 1) * 0.15 * run + g * 0.22;
+    earR.current!.rotation.x = -0.12 - Math.sin(f + 1) * 0.15 * run + g * 0.08;
+
+    // Tail is carried level, so the wag is side to side (about y), lifting when excited.
+    tail.current!.rotation.y = Math.sin(t * (9 + g * 10)) * (0.35 + g * 0.45);
+    tail.current!.rotation.z = 0.15 + g * 0.25;
+
+    const amp = 0.6 * run;
     legs[0].current!.rotation.z = Math.sin(f) * amp;
     legs[1].current!.rotation.z = Math.sin(f + 0.5) * amp;
     legs[2].current!.rotation.z = Math.sin(f + Math.PI) * amp * 0.85;
@@ -228,69 +256,96 @@ export function GoldenRetriever({ progress, base }: { progress: Progress; base: 
   return (
     <group ref={root}>
       <group ref={body}>
-        {/* torso */}
-        <Blob m={M.gold} at={[0, 0, 0]} s={[0.6, 0.4, 0.4]} />
-        <Blob m={M.goldLight} at={[0.32, 0.08, 0]} s={[0.36, 0.4, 0.37]} />
-        <Blob m={M.gold} at={[-0.34, 0.05, 0]} s={[0.36, 0.37, 0.37]} />
-        <Blob m={M.goldLight} at={[0.36, -0.2, 0]} s={[0.2, 0.14, 0.22]} />
+        {/* torso: deep chest, tucked waist, rounded rump */}
+        <Blob m={M.gold} at={[0.36, 0.02, 0]} s={[0.36, 0.34, 0.3]} />
+        <Blob m={M.gold} at={[0, 0.05, 0]} s={[0.5, 0.29, 0.28]} />
+        <Blob m={M.gold} at={[-0.4, 0.06, 0]} s={[0.32, 0.31, 0.3]} />
+        {/* chest feathering and belly fringe */}
+        <Blob m={M.goldLight} at={[0.5, -0.12, 0]} s={[0.17, 0.24, 0.22]} />
+        <Blob m={M.goldLight} at={[0.08, -0.13, 0]} s={[0.36, 0.1, 0.2]} />
 
-        {/* legs pivot at shoulder / hip */}
+        {/* forelegs: long and straight, with feathering behind */}
         {(
           [
-            [0.3, -0.1, 0.18],
-            [0.3, -0.1, -0.18],
-            [-0.3, -0.08, 0.18],
-            [-0.3, -0.08, -0.18],
+            [0.36, -0.12, 0.15],
+            [0.36, -0.12, -0.15],
           ] as V3[]
         ).map((pos, i) => (
-          <group key={i} ref={legs[i]} position={pos}>
-            <Capsule m={M.gold} at={[0, -0.24, 0]} radius={0.1} length={0.26} />
-            <Blob m={M.goldLight} at={[0.04, -0.45, 0]} s={[0.13, 0.08, 0.12]} />
+          <group key={`f${i}`} ref={legs[i]} position={pos}>
+            <Capsule m={M.gold} at={[0, -0.3, 0]} radius={0.09} length={0.4} />
+            <Blob m={M.goldLight} at={[-0.06, -0.26, 0]} s={[0.05, 0.15, 0.06]} />
+            <Blob m={M.goldLight} at={[0.03, -0.66, 0]} s={[0.115, 0.06, 0.1]} />
           </group>
         ))}
 
-        <group ref={tail} position={[-0.6, 0.15, 0]}>
+        {/* hind legs: muscular haunch and an angled hock */}
+        {(
+          [
+            [-0.4, -0.06, 0.15],
+            [-0.4, -0.06, -0.15],
+          ] as V3[]
+        ).map((pos, i) => (
+          <group key={`h${i}`} ref={legs[i + 2]} position={pos}>
+            <Blob m={M.gold} at={[0, -0.08, 0]} s={[0.2, 0.25, 0.13]} />
+            <Capsule m={M.gold} at={[-0.07, -0.42, 0]} radius={0.082} length={0.28} r={[0, 0, -0.22]} />
+            <Blob m={M.goldLight} at={[-0.15, -0.3, 0]} s={[0.06, 0.13, 0.06]} />
+            <Blob m={M.goldLight} at={[-0.05, -0.72, 0]} s={[0.115, 0.06, 0.1]} />
+          </group>
+        ))}
+
+        {/* long feathered tail carried level */}
+        <group ref={tail} position={[-0.66, 0.14, 0]}>
           <mesh geometry={tailGeo} material={M.gold} />
-          <Blob m={M.goldLight} at={[-0.3, 0.52, 0]} s={0.09} />
+          <Blob m={M.goldLight} at={[-0.22, -0.03, 0]} s={[0.15, 0.06, 0.055]} />
+          <Blob m={M.goldLight} at={[-0.43, 0.06, 0]} s={[0.14, 0.06, 0.05]} />
+          <Blob m={M.goldLight} at={[-0.62, 0.18, 0]} s={[0.07, 0.06, 0.06]} />
         </group>
 
-        {/* coral bandana: neck band + paw-print flap */}
-        <group position={[0.42, 0.3, 0]} rotation={[0, 0, 0.75]}>
+        {/* neck with a soft ruff */}
+        <Capsule m={M.gold} at={[0.56, 0.3, 0]} radius={0.16} length={0.3} r={[0, 0, -0.65]} />
+        <Blob m={M.goldLight} at={[0.6, 0.18, 0]} s={[0.15, 0.17, 0.19]} />
+
+        {/* coral bandana: neck band + paw-print flap on the chest */}
+        <group position={[0.55, 0.26, 0]} rotation={[0, 0, 0.9]}>
           <mesh geometry={bandGeo} material={M.coral} rotation={[0, Math.PI / 2, 0]} />
         </group>
-        <group position={[0.6, 0.12, 0.06]} rotation={[0, Math.PI / 2 - 0.55, 0.12]}>
+        <group position={[0.7, 0.1, 0.04]} rotation={[0, Math.PI / 2 - 0.55, 0.1]}>
           <mesh geometry={flapGeo} material={M.coral} />
-          <Blob m={M.cream} at={[0, -0.07, 0.03]} s={[0.055, 0.045, 0.012]} />
-          <Blob m={M.cream} at={[-0.065, 0.0, 0.03]} s={[0.02, 0.025, 0.01]} />
-          <Blob m={M.cream} at={[-0.022, 0.03, 0.03]} s={[0.02, 0.025, 0.01]} />
-          <Blob m={M.cream} at={[0.022, 0.03, 0.03]} s={[0.02, 0.025, 0.01]} />
-          <Blob m={M.cream} at={[0.065, 0.0, 0.03]} s={[0.02, 0.025, 0.01]} />
+          <Blob m={M.cream} at={[0, -0.06, 0.025]} s={[0.045, 0.037, 0.01]} />
+          <Blob m={M.cream} at={[-0.054, 0.0, 0.025]} s={[0.017, 0.021, 0.008]} />
+          <Blob m={M.cream} at={[-0.018, 0.026, 0.025]} s={[0.017, 0.021, 0.008]} />
+          <Blob m={M.cream} at={[0.018, 0.026, 0.025]} s={[0.017, 0.021, 0.008]} />
+          <Blob m={M.cream} at={[0.054, 0.0, 0.025]} s={[0.017, 0.021, 0.008]} />
         </group>
 
-        {/* head */}
-        <group ref={head} position={[0.6, 0.56, 0]}>
-          <Blob m={M.gold} at={[0, 0, 0]} s={[0.46, 0.42, 0.44]} />
-          <Blob m={M.goldLight} at={[-0.08, 0.3, 0]} s={[0.2, 0.12, 0.2]} />
-          <Blob m={M.goldLight} at={[0.1, -0.16, 0.28]} s={[0.2, 0.18, 0.14]} />
-          <Blob m={M.goldLight} at={[0.1, -0.16, -0.28]} s={[0.2, 0.18, 0.14]} />
-          <Blob m={M.cream} at={[0.36, -0.13, 0]} s={[0.25, 0.19, 0.24]} />
-          <Blob m={M.nose} at={[0.6, -0.05, 0]} s={[0.1, 0.075, 0.12]} />
-          <Blob m={M.white} at={[0.65, -0.02, 0.04]} s={0.02} />
-          <Blob m={M.mouth} at={[0.44, -0.27, 0]} s={[0.17, 0.1, 0.15]} />
-          <Blob m={M.tongue} at={[0.47, -0.34, 0.02]} s={[0.1, 0.07, 0.09]} r={[0, 0, -0.3]} />
+        {/* head: broad skull, defined stop, long muzzle */}
+        <group ref={head} position={[0.74, 0.56, 0]}>
+          <Blob m={M.gold} at={[0, 0, 0]} s={[0.29, 0.26, 0.25]} />
+          <Blob m={M.goldLight} at={[-0.02, -0.12, 0.16]} s={[0.14, 0.12, 0.08]} />
+          <Blob m={M.goldLight} at={[-0.02, -0.12, -0.16]} s={[0.14, 0.12, 0.08]} />
+          {/* muzzle and lower jaw */}
+          <Blob m={M.gold} at={[0.3, -0.07, 0]} s={[0.25, 0.12, 0.14]} />
+          <Blob m={M.goldLight} at={[0.32, -0.12, 0]} s={[0.22, 0.08, 0.13]} />
+          <Blob m={M.goldLight} at={[0.24, -0.2, 0]} s={[0.18, 0.05, 0.1]} />
+          <Blob m={M.nose} at={[0.54, -0.035, 0]} s={[0.065, 0.05, 0.075]} />
+          <Blob m={M.white} at={[0.575, -0.01, 0.025]} s={0.014} />
+          {/* open, panting mouth */}
+          <Blob m={M.mouth} at={[0.33, -0.17, 0]} s={[0.16, 0.04, 0.1]} />
+          <Blob m={M.tongue} at={[0.34, -0.23, 0.01]} s={[0.08, 0.05, 0.065]} r={[0, 0, -0.35]} />
+          {/* almond eyes set forward at the stop, with brows */}
           {[1, -1].map((side) => (
             <group key={side}>
-              <Blob m={M.white} at={[0.3, 0.1, 0.25 * side]} s={[0.09, 0.11, 0.06]} r={[0, -0.5 * side, 0]} />
-              <Blob m={M.iris} at={[0.34, 0.1, 0.28 * side]} s={0.066} />
-              <Blob m={M.white} at={[0.375, 0.14, 0.3 * side]} s={0.019} />
-              <Blob m={M.goldDark} at={[0.28, 0.24, 0.25 * side]} s={[0.07, 0.02, 0.04]} />
+              <Blob m={M.iris} at={[0.19, 0.06, 0.15 * side]} s={[0.045, 0.04, 0.035]} r={[0, -0.6 * side, 0]} />
+              <Blob m={M.white} at={[0.215, 0.075, 0.165 * side]} s={0.011} />
+              <Blob m={M.goldDark} at={[0.18, 0.12, 0.15 * side]} s={[0.055, 0.016, 0.035]} r={[0, 0, -0.2]} />
             </group>
           ))}
-          <group ref={earL} position={[-0.04, 0.24, 0.38]}>
-            <Blob m={M.goldDark} at={[0, -0.24, 0]} s={[0.17, 0.33, 0.09]} />
+          {/* low-set ears hanging past the jaw */}
+          <group ref={earL} position={[-0.06, 0.1, 0.22]}>
+            <Blob m={M.goldDark} at={[0.02, -0.2, 0.02]} s={[0.12, 0.23, 0.05]} r={[0, 0, 0.12]} />
           </group>
-          <group ref={earR} position={[-0.04, 0.24, -0.38]}>
-            <Blob m={M.goldDark} at={[0, -0.24, 0]} s={[0.17, 0.33, 0.09]} />
+          <group ref={earR} position={[-0.06, 0.1, -0.22]}>
+            <Blob m={M.goldDark} at={[0.02, -0.2, -0.02]} s={[0.12, 0.23, 0.05]} r={[0, 0, 0.12]} />
           </group>
         </group>
       </group>
@@ -304,7 +359,7 @@ export function GoldenRetriever({ progress, base }: { progress: Progress; base: 
 
 const CAT_REACH = 0.4;
 
-export function GreyTabby({ progress, base }: { progress: Progress; base: V3 }) {
+export function GreyTabby({ progress, base, showcase = false, greet }: PetProps) {
   const M = mats();
   const G = geo();
   const root = useRef<Group>(null);
@@ -325,19 +380,21 @@ export function GreyTabby({ progress, base }: { progress: Progress; base: V3 }) 
     const forward = smoothstep(0.14, 0.46, p);
     const watch = smoothstep(0.46, 0.75, p);
     const idle = 1 - range(p, 0, 0.1);
+    const g = pulse(greet);
 
     root.current!.position.set(base[0] + forward * 0.45, GROUND_Y + CAT_REACH + arc * 0.8, base[2] + forward * 0.5);
     root.current!.rotation.z = Math.cos(Math.PI * leap) * 0.38 * arc;
-    root.current!.rotation.y = -0.2 - watch * 0.5;
+    root.current!.rotation.y = (showcase ? -0.65 : -0.2) - watch * 0.5;
     body.current!.position.y = Math.sin(t * 2.4) * 0.01;
-    head.current!.rotation.y = watch * 0.45 + Math.sin(t * 1.1) * 0.05;
+    head.current!.rotation.y = watch * 0.45 + Math.sin(t * 1.1) * 0.05 + g * 0.3;
     head.current!.rotation.z = Math.sin(t * 1.7) * 0.05 - arc * 0.2;
-    tail.current!.rotation.x = Math.sin(t * 3) * 0.3;
+    head.current!.rotation.x = -g * 0.42; // curious head tilt
+    tail.current!.rotation.x = Math.sin(t * (3 + g * 6)) * (0.3 + g * 0.35);
     tail.current!.rotation.z = -arc * 0.6;
 
-    // Stretch into the leap; tap a front paw while waiting.
-    const tap = Math.max(0, Math.sin(t * 3)) * 0.6 * idle;
-    legs[0].current!.rotation.z = arc * 1.0 + tap;
+    // Stretch into the leap; tap a front paw while waiting; wave hello when greeted.
+    const tap = Math.max(0, Math.sin(t * 3)) * (showcase ? 0.25 : 0.6) * idle;
+    legs[0].current!.rotation.z = arc * 1.0 + tap + g * 1.1;
     legs[1].current!.rotation.z = arc * 0.9;
     legs[2].current!.rotation.z = -arc * 0.9;
     legs[3].current!.rotation.z = -arc * 0.8;

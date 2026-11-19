@@ -1,5 +1,5 @@
 // Converts the provided Pet Parade product photos into web-sized WebP files
-// and crops a static hero fallback from the approved concept illustration.
+// and the homepage hero / footer photos from pet-parade-products/hero/.
 import sharp from "sharp";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -54,17 +54,22 @@ for (const [slug, files] of Object.entries(products)) {
   console.log("optimized", slug);
 }
 
-// Static hero fallback: the dog-and-cat portion of the approved concept (right side of the hero).
-const concept = sharp(path.join(root, "design-reference", "pet-parade-concept.webp"));
-const { width: W, height: H } = await concept.metadata();
-console.log("concept size", W, H);
-await concept
-  .extract({
-    left: Math.round(W * 0.44),
-    top: Math.round(H * 0.035),
-    width: Math.round(W * 0.56),
-    height: Math.round(H * 0.27),
-  })
-  .webp({ quality: 82 })
-  .toFile(path.join(root, "public", "art", "hero-fallback.webp"));
-console.log("hero fallback written");
+// Homepage hero: the bandana retriever and harness tabby. To swap the photo, replace the
+// source file and update HERO in lib/site.ts if the focal point moves.
+const heroSrc = path.join(src, "hero", "hero-pets-living-room.webp");
+for (const width of [960, 1752]) {
+  await sharp(heroSrc)
+    .resize({ width })
+    .webp({ quality: 80, effort: 6 })
+    .toFile(path.join(root, "public", "art", `hero-pets-${width}.webp`));
+}
+
+// Footer band: the studio shot, cropped to the pets on the right.
+const studio = sharp(path.join(src, "hero", "hero-pets-studio-yellow.webp"));
+const meta = await studio.metadata();
+await studio
+  .extract({ left: Math.round(meta.width * 0.34), top: 0, width: Math.round(meta.width * 0.66), height: meta.height })
+  .resize({ width: 900 })
+  .webp({ quality: 80, effort: 6 })
+  .toFile(path.join(root, "public", "art", "footer-pets.webp"));
+console.log("hero and footer photos written");
